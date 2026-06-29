@@ -2,15 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DISCLAIMER } from "@/lib/system-prompt";
-import { CRISIS_RESOURCES, type RiskLevel } from "@/lib/safety";
+import { assessRisk, CRISIS_RESOURCES, type RiskLevel } from "@/lib/safety";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
+// In the static GitHub Pages build there is no server to call Claude, so the
+// chat is simulated. The safety layer still runs client-side as a demonstration.
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+const DEMO_REPLY =
+  "Thanks for sharing that. You're in the UI demo, so I can't give a real, considered response here — this version runs without a backend. In the full app I'd listen and reflect on what you said, at your pace. (Notice the safety check still ran on your message.) To try the real thing, run it locally or deploy it with an API key.";
+
 const GREETING =
   "Hi — I'm here to listen. There's no agenda and nothing you have to get “right.” What's on your mind today?";
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
@@ -39,6 +50,28 @@ export default function Home() {
 
     // Add an empty assistant message we'll stream into.
     setMessages((m) => [...m, { role: "assistant", content: "" }]);
+
+    // Demo mode: no server. Run the safety heuristic locally and "type" a
+    // canned reply so the UI is fully explorable on static hosting.
+    if (DEMO_MODE) {
+      const detected = assessRisk(text).level;
+      if (detected !== "none") setRiskLevel(detected);
+      const words = DEMO_REPLY.split(" ");
+      for (let i = 0; i < words.length; i++) {
+        await sleep(28);
+        const chunk = (i === 0 ? "" : " ") + words[i];
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = {
+            role: "assistant",
+            content: copy[copy.length - 1].content + chunk,
+          };
+          return copy;
+        });
+      }
+      setIsStreaming(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/chat", {
@@ -96,7 +129,14 @@ export default function Home() {
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto w-full">
       <header className="px-5 pt-6 pb-3">
-        <h1 className="text-lg font-semibold tracking-tight">A space to talk</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold tracking-tight">A space to talk</h1>
+          {DEMO_MODE && (
+            <span className="rounded-full bg-stone-200 dark:bg-stone-700 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-600 dark:text-stone-300">
+              Demo · chat simulated
+            </span>
+          )}
+        </div>
         <p className="text-xs text-stone-500 mt-1 leading-relaxed">{DISCLAIMER}</p>
       </header>
 
