@@ -92,7 +92,7 @@ export async function POST(request: Request) {
             contents,
             generationConfig: {
               maxOutputTokens: 1024,
-              temperature: 0.85,
+              temperature: 0.95,
               // Disable "thinking" so the short output budget goes to the
               // actual reply (and replies stay snappy in a chat).
               thinkingConfig: { thinkingBudget: 0 },
