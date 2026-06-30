@@ -1,12 +1,12 @@
 # A space to talk — AI supportive companion
 
-A calm, web-based AI companion for emotional support and reflection, built with Next.js and the Anthropic API.
+A calm, web-based AI companion for emotional support and reflection, built with Next.js and the Google Gemini API (free tier).
 
 > ⚠️ **Important:** This is a *supportive companion*, not a licensed therapist, and not a substitute for professional mental-health care. It is designed with safety guardrails (crisis detection, resource surfacing, scope boundaries), but anyone building on it for real users must take the responsibilities in [Safety & ethics](#safety--ethics) seriously.
 
 ## What's here
 
-- **Streaming chat** (`app/api/chat/route.ts`) — talks to Claude with server-side streaming.
+- **Streaming chat** (`app/api/chat/route.ts`) — streams from Gemini (`gemini-2.5-flash`) server-side, so the API key stays secret.
 - **Therapeutic persona** (`lib/system-prompt.ts`) — warm, reflective, evidence-informed (active/reflective listening, MI, light CBT framing); explicitly non-clinical.
 - **Safety layer** (`lib/safety.ts`) — heuristic risk detection (suicidal ideation, self-harm, harm to others, abuse) that surfaces real crisis resources and steers the model, independent of the model's own output.
 - **Calm UI** (`app/page.tsx`) — focused chat with persistent disclaimer and a crisis-resource banner.
@@ -17,18 +17,18 @@ A calm, web-based AI companion for emotional support and reflection, built with 
    ```bash
    npm install
    ```
-2. Add your Anthropic API key to `.env.local`:
+2. Add your free Google Gemini API key to `.env.local`:
    ```
-   ANTHROPIC_API_KEY=sk-ant-...
+   GEMINI_API_KEY=...
    ```
-   Get one at https://console.anthropic.com/.
+   Get one (free, no card) at https://aistudio.google.com/apikey.
 3. Run the dev server:
    ```bash
    npm run dev
    ```
 4. Open http://localhost:3000.
 
-The default model is `claude-sonnet-4-6` (good balance of quality and cost for long conversations). Override with `ANTHROPIC_MODEL` — e.g. `claude-opus-4-8` for higher nuance.
+The default model is `gemini-2.5-flash` (fast and free-tier friendly). Override with `GEMINI_MODEL`.
 
 ## Safety & ethics
 
