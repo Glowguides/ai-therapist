@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DISCLAIMER } from "@/lib/system-prompt";
 import { assessRisk, CRISIS_RESOURCES, type RiskLevel } from "@/lib/safety";
+import { streamGemini } from "@/lib/gemini-client";
 import SmokeBackground from "./SmokeBackground";
 
 interface Message {
@@ -10,9 +11,11 @@ interface Message {
   content: string;
 }
 
-// In the static GitHub Pages build there is no server to call Claude, so the
-// chat is simulated. The safety layer still runs client-side as a demonstration.
+// Static GitHub Pages build (no server). If a public Gemini key is baked in,
+// we stream the real model from the browser; otherwise the chat is simulated.
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+const PUBLIC_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const SIMULATED = DEMO_MODE && !PUBLIC_KEY;
 
 const DEMO_REPLY =
   "Thanks for sharing that. You're in the UI demo, so I can't give a real, considered response here — this version runs without a backend. In the full app I'd listen and reflect on what you said, at your pace. (Notice the safety check still ran on your message.) To try the real thing, run it locally or deploy it with an API key.";
@@ -52,23 +55,40 @@ export default function Home() {
     // Add an empty assistant message we'll stream into.
     setMessages((m) => [...m, { role: "assistant", content: "" }]);
 
-    // Demo mode: no server. Run the safety heuristic locally and "type" a
-    // canned reply so the UI is fully explorable on static hosting.
+    const appendChunk = (chunk: string) =>
+      setMessages((m) => {
+        const copy = [...m];
+        copy[copy.length - 1] = {
+          role: "assistant",
+          content: copy[copy.length - 1].content + chunk,
+        };
+        return copy;
+      });
+
+    // Static build (GitHub Pages): no server route to call.
     if (DEMO_MODE) {
       const detected = assessRisk(text).level;
       if (detected !== "none") setRiskLevel(detected);
-      const words = DEMO_REPLY.split(" ");
-      for (let i = 0; i < words.length; i++) {
-        await sleep(28);
-        const chunk = (i === 0 ? "" : " ") + words[i];
-        setMessages((m) => {
-          const copy = [...m];
-          copy[copy.length - 1] = {
-            role: "assistant",
-            content: copy[copy.length - 1].content + chunk,
-          };
-          return copy;
-        });
+
+      if (PUBLIC_KEY) {
+        // Real Gemini, streamed directly from the browser.
+        try {
+          for await (const chunk of streamGemini(next, PUBLIC_KEY)) {
+            appendChunk(chunk);
+          }
+        } catch (err) {
+          console.error(err);
+          appendChunk(
+            "Something went wrong reaching me just now. If this is urgent, please contact a crisis line or local emergency services.",
+          );
+        }
+      } else {
+        // No key configured — "type" a canned reply.
+        const words = DEMO_REPLY.split(" ");
+        for (let i = 0; i < words.length; i++) {
+          await sleep(28);
+          appendChunk((i === 0 ? "" : " ") + words[i]);
+        }
       }
       setIsStreaming(false);
       return;
@@ -141,7 +161,7 @@ export default function Home() {
             <h1 className="bg-gradient-to-r from-teal-100 via-white to-indigo-200 bg-clip-text text-xl font-semibold tracking-tight text-transparent">
               A space to talk
             </h1>
-            {DEMO_MODE && (
+            {SIMULATED && (
               <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/70">
                 Demo · simulated
               </span>
