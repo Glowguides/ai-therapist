@@ -1,13 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
 import { assessRisk, CRISIS_REPLY_GUIDANCE } from "@/lib/safety";
 
 // This route streams from the model, so it must run per-request (never cached).
 export const dynamic = "force-dynamic";
 
-// Workhorse model. Override with ANTHROPIC_MODEL (e.g. claude-opus-4-8) if you
-// want higher nuance at higher cost.
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
+// Google Gemini (free tier). Override with GEMINI_MODEL if desired.
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 // Cap history so a long conversation can't blow up cost / latency unbounded.
 const MAX_HISTORY_MESSAGES = 40;
@@ -22,16 +20,18 @@ function isValidMessage(m: unknown): m is ChatMessage {
   return (
     typeof m === "object" &&
     m !== null &&
-    (("role" in m && ((m as ChatMessage).role === "user" || (m as ChatMessage).role === "assistant"))) &&
+    "role" in m &&
+    ((m as ChatMessage).role === "user" || (m as ChatMessage).role === "assistant") &&
     "content" in m &&
     typeof (m as ChatMessage).content === "string"
   );
 }
 
 export async function POST(request: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     return Response.json(
-      { error: "Server is not configured. Set ANTHROPIC_API_KEY." },
+      { error: "Server is not configured. Set GEMINI_API_KEY." },
       { status: 500 },
     );
   }
@@ -62,38 +62,89 @@ export async function POST(request: Request) {
     );
   }
 
-  // Run the safety check on the latest user message.
+  // Safety check on the latest user message.
   const lastUserMessage = messages[messages.length - 1].content;
   const risk = assessRisk(lastUserMessage);
 
-  // Build the system prompt, layering in crisis guidance when warranted.
-  const system =
+  const systemText =
     risk.level === "crisis"
       ? `${SYSTEM_PROMPT}\n\n# ACTIVE SAFETY CONTEXT\n${CRISIS_REPLY_GUIDANCE}`
       : SYSTEM_PROMPT;
 
-  const client = new Anthropic();
+  // Gemini uses role "model" for the assistant.
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const modelStream = client.messages.stream({
-          model: MODEL,
-          max_tokens: 1024,
-          system,
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        const upstream = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemText }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: 1024,
+              temperature: 0.85,
+              // Disable "thinking" so the short output budget goes to the
+              // actual reply (and replies stay snappy in a chat).
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          }),
         });
 
-        modelStream.on("text", (delta) => {
-          controller.enqueue(encoder.encode(delta));
-        });
+        if (!upstream.ok || !upstream.body) {
+          const detail = await upstream.text().catch(() => "");
+          console.error("gemini error:", upstream.status, detail.slice(0, 500));
+          controller.enqueue(
+            encoder.encode(
+              "\n\n(Sorry — I'm having trouble responding right now. If this is urgent, please reach out to a crisis line or local emergency services.)",
+            ),
+          );
+          controller.close();
+          return;
+        }
 
-        await modelStream.finalMessage();
+        // Parse the SSE stream and forward text deltas.
+        const reader = upstream.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const data = trimmed.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
+            try {
+              const json = JSON.parse(data);
+              const parts = json?.candidates?.[0]?.content?.parts;
+              if (Array.isArray(parts)) {
+                for (const p of parts) {
+                  if (typeof p?.text === "string" && p.text.length > 0) {
+                    controller.enqueue(encoder.encode(p.text));
+                  }
+                }
+              }
+            } catch {
+              // Ignore partial / non-JSON keepalive lines.
+            }
+          }
+        }
         controller.close();
       } catch (err) {
-        // Stream has likely started, so we can't change the status code —
-        // surface a gentle fallback in-band instead.
         console.error("chat stream error:", err);
         controller.enqueue(
           encoder.encode(
@@ -110,8 +161,6 @@ export async function POST(request: Request) {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
-      // Lets the client surface crisis resources immediately, in parallel with
-      // the model's streamed reply.
       "X-Risk-Level": risk.level,
     },
   });
