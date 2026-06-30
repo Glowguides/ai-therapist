@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DISCLAIMER } from "@/lib/system-prompt";
 import { assessRisk, CRISIS_RESOURCES, type RiskLevel } from "@/lib/safety";
+import SmokeBackground from "./SmokeBackground";
 
 interface Message {
   role: "user" | "assistant";
@@ -127,52 +128,78 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-dvh max-w-2xl mx-auto w-full">
-      <header className="px-5 pt-6 pb-3">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold tracking-tight">A space to talk</h1>
-          {DEMO_MODE && (
-            <span className="rounded-full bg-stone-200 dark:bg-stone-700 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-600 dark:text-stone-300">
-              Demo · chat simulated
+    <main className="relative flex min-h-dvh items-center justify-center p-3 sm:p-6">
+      <SmokeBackground />
+
+      <section className="flex h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.05] shadow-[0_24px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-md ring-1 ring-white/5">
+        <header className="border-b border-white/10 px-6 pb-4 pt-6">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="pulse-soft absolute inline-flex h-full w-full rounded-full bg-teal-300" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-400" />
             </span>
-          )}
+            <h1 className="bg-gradient-to-r from-teal-100 via-white to-indigo-200 bg-clip-text text-xl font-semibold tracking-tight text-transparent">
+              A space to talk
+            </h1>
+            {DEMO_MODE && (
+              <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/70">
+                Demo · simulated
+              </span>
+            )}
+          </div>
+          <p className="mt-2 max-w-prose text-xs leading-relaxed text-white/45">
+            {DISCLAIMER}
+          </p>
+        </header>
+
+        {riskLevel !== "none" && <CrisisBanner level={riskLevel} />}
+
+        <div ref={scrollRef} className="scroll-soft flex-1 space-y-4 overflow-y-auto px-5 py-6 sm:px-6">
+          {messages.map((m, i) => (
+            <Bubble
+              key={i}
+              role={m.role}
+              content={m.content}
+              streaming={isStreaming && i === messages.length - 1}
+            />
+          ))}
         </div>
-        <p className="text-xs text-stone-500 mt-1 leading-relaxed">{DISCLAIMER}</p>
-      </header>
 
-      {riskLevel !== "none" && <CrisisBanner level={riskLevel} />}
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-        {messages.map((m, i) => (
-          <Bubble
-            key={i}
-            role={m.role}
-            content={m.content}
-            streaming={isStreaming && i === messages.length - 1}
-          />
-        ))}
-      </div>
-
-      <div className="px-5 pb-5 pt-2">
-        <div className="flex items-end gap-2 rounded-2xl border border-stone-300/70 bg-white/60 dark:bg-stone-900/40 dark:border-stone-700 p-2 shadow-sm">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            rows={1}
-            placeholder="Type what's on your mind…"
-            className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-stone-400 max-h-40"
-          />
-          <button
-            onClick={send}
-            disabled={isStreaming || !input.trim()}
-            className="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-40"
-          >
-            Send
-          </button>
+        <div className="px-4 pb-5 pt-3 sm:px-6">
+          <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-2 shadow-inner backdrop-blur-xl transition focus-within:border-teal-300/40 focus-within:ring-1 focus-within:ring-teal-300/30">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              rows={1}
+              placeholder="Type what's on your mind…"
+              className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/35"
+            />
+            <button
+              onClick={send}
+              disabled={isStreaming || !input.trim()}
+              aria-label="Send message"
+              className="group shrink-0 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 px-4 py-2.5 text-sm font-medium text-emerald-950 shadow-lg shadow-teal-500/20 transition hover:shadow-teal-400/40 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
+            >
+              <svg
+                className="h-4 w-4 transition-transform group-enabled:group-hover:translate-x-0.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </button>
+          </div>
+          <p className="mt-2 text-center text-[10px] text-white/25">
+            Press Enter to send · Shift+Enter for a new line
+          </p>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
@@ -186,16 +213,26 @@ function Bubble({
   streaming: boolean;
 }) {
   const isUser = role === "user";
+  const showDots = !content && streaming;
+
   return (
-    <div className={isUser ? "flex justify-end" : "flex justify-start"}>
+    <div className={`rise-in flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={
           isUser
-            ? "max-w-[85%] rounded-2xl rounded-br-md bg-teal-700 px-4 py-2.5 text-sm text-white whitespace-pre-wrap"
-            : "max-w-[85%] rounded-2xl rounded-bl-md bg-stone-100 dark:bg-stone-800 px-4 py-2.5 text-sm text-stone-800 dark:text-stone-100 whitespace-pre-wrap"
+            ? "max-w-[82%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-teal-500/90 to-emerald-600/90 px-4 py-2.5 text-sm leading-relaxed text-white shadow-lg shadow-emerald-900/30"
+            : "max-w-[82%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-white/[0.07] px-4 py-2.5 text-sm leading-relaxed text-white/90 backdrop-blur-md"
         }
       >
-        {content || (streaming ? <span className="text-stone-400">…</span> : "")}
+        {showDots ? (
+          <span className="flex gap-1 py-0.5">
+            <span className="pulse-soft h-1.5 w-1.5 rounded-full bg-white/60" style={{ animationDelay: "0ms" }} />
+            <span className="pulse-soft h-1.5 w-1.5 rounded-full bg-white/60" style={{ animationDelay: "200ms" }} />
+            <span className="pulse-soft h-1.5 w-1.5 rounded-full bg-white/60" style={{ animationDelay: "400ms" }} />
+          </span>
+        ) : (
+          content
+        )}
       </div>
     </div>
   );
@@ -203,16 +240,16 @@ function Bubble({
 
 function CrisisBanner({ level }: { level: RiskLevel }) {
   return (
-    <div className="mx-5 mb-1 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 px-4 py-3">
-      <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+    <div className="mx-5 mt-3 rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 backdrop-blur-md sm:mx-6">
+      <p className="text-sm font-medium text-amber-100">
         {level === "crisis"
           ? "It sounds like you're going through something really hard. You deserve support from a real person right now."
           : "If things feel like too much, you don't have to face it alone."}
       </p>
-      <ul className="mt-2 space-y-1.5 text-xs text-amber-900/90 dark:text-amber-200/90">
+      <ul className="mt-2 space-y-1.5 text-xs text-amber-100/80">
         {CRISIS_RESOURCES.map((r) => (
           <li key={r.name}>
-            <span className="font-semibold">{r.name}:</span> {r.detail}
+            <span className="font-semibold text-amber-100">{r.name}:</span> {r.detail}
             {r.href && (
               <>
                 {" "}
@@ -220,7 +257,7 @@ function CrisisBanner({ level }: { level: RiskLevel }) {
                   href={r.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline underline-offset-2"
+                  className="underline decoration-amber-300/50 underline-offset-2 hover:text-amber-50"
                 >
                   {r.href.replace(/^https?:\/\//, "")}
                 </a>

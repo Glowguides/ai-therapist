@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  /* Warm, calm off-white — easier on the eyes than pure white. */
-  --background: #faf8f5;
-  --foreground: #292524;
+  color-scheme: dark;
+  --background: #07090c;
+  --foreground: #ece9e4;
 }
 
 @theme inline {
@@ -13,15 +13,83 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1c1917;
-    --foreground: #e7e5e4;
-  }
-}
-
+html,
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* ---- Smoke / atmosphere ------------------------------------------------ */
+
+/* Large, heavily-blurred colour clouds that drift slowly behind the glass. */
+.smoke-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(56px);
+  opacity: 0.8;
+  will-change: transform;
+  mix-blend-mode: screen;
+}
+
+@keyframes drift-a {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  33%  { transform: translate3d(8vw, 6vh, 0) scale(1.18); }
+  66%  { transform: translate3d(-6vw, 10vh, 0) scale(0.92); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes drift-b {
+  0%   { transform: translate3d(0, 0, 0) scale(1.05); }
+  50%  { transform: translate3d(-10vw, -8vh, 0) scale(1.25); }
+  100% { transform: translate3d(0, 0, 0) scale(1.05); }
+}
+@keyframes drift-c {
+  0%   { transform: translate3d(0, 0, 0) scale(0.95); }
+  40%  { transform: translate3d(12vw, -6vh, 0) scale(1.1); }
+  80%  { transform: translate3d(4vw, 8vh, 0) scale(0.85); }
+  100% { transform: translate3d(0, 0, 0) scale(0.95); }
+}
+
+.anim-a { animation: drift-a 26s ease-in-out infinite; }
+.anim-b { animation: drift-b 34s ease-in-out infinite; }
+.anim-c { animation: drift-c 30s ease-in-out infinite; }
+
+/* Slow vertical rise for the turbulence smoke sheet. */
+@keyframes smoke-rise {
+  0%   { transform: translateY(4%) scale(1.1); opacity: 0.5; }
+  50%  { opacity: 0.75; }
+  100% { transform: translateY(-6%) scale(1.25); opacity: 0.5; }
+}
+.smoke-sheet { animation: smoke-rise 40s ease-in-out infinite alternate; }
+
+/* Gentle entrance for chat bubbles. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Breathing dot for the "thinking" state. */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+.pulse-soft { animation: pulse-soft 1.4s ease-in-out infinite; }
+
+/* Custom slim scrollbar that stays out of the way. */
+.scroll-soft {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.scroll-soft::-webkit-scrollbar { width: 6px; }
+.scroll-soft::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+
+/* Respect users who prefer less motion (matters for a calming product). */
+@media (prefers-reduced-motion: reduce) {
+  .anim-a, .anim-b, .anim-c, .smoke-sheet, .pulse-soft, .rise-in {
+    animation: none !important;
+  }
 }
