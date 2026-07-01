@@ -35,6 +35,18 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [riskLevel, setRiskLevel] = useState<RiskLevel>("none");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sessionIdRef = useRef<string>("");
+
+  useEffect(() => {
+    // Stable random session id (no IP / device tracking) for grouping a
+    // person's conversation across messages.
+    let id = localStorage.getItem("sid");
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem("sid", id);
+    }
+    sessionIdRef.current = id;
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -98,7 +110,7 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, sessionId: sessionIdRef.current }),
       });
 
       const detected = (res.headers.get("X-Risk-Level") as RiskLevel) ?? "none";

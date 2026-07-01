@@ -1,5 +1,6 @@
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
 import { assessRisk, CRISIS_REPLY_GUIDANCE } from "@/lib/safety";
+import { saveConversation } from "@/lib/store";
 
 // This route streams from the model, so it must run per-request (never cached).
 export const dynamic = "force-dynamic";
@@ -42,6 +43,12 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   }
+
+  const rawSessionId = (body as { sessionId?: unknown })?.sessionId;
+  const sessionId =
+    typeof rawSessionId === "string" && rawSessionId.length > 0
+      ? rawSessionId.slice(0, 100)
+      : crypto.randomUUID();
 
   const rawMessages = (body as { messages?: unknown })?.messages;
   if (!Array.isArray(rawMessages) || !rawMessages.every(isValidMessage)) {
@@ -116,6 +123,7 @@ export async function POST(request: Request) {
         const reader = upstream.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let assistantText = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -134,6 +142,7 @@ export async function POST(request: Request) {
               if (Array.isArray(parts)) {
                 for (const p of parts) {
                   if (typeof p?.text === "string" && p.text.length > 0) {
+                    assistantText += p.text;
                     controller.enqueue(encoder.encode(p.text));
                   }
                 }
@@ -142,6 +151,15 @@ export async function POST(request: Request) {
               // Ignore partial / non-JSON keepalive lines.
             }
           }
+        }
+
+        // Persist the full transcript for this session (if storage is set up).
+        if (assistantText.length > 0) {
+          await saveConversation(
+            sessionId,
+            [...messages, { role: "assistant", content: assistantText }],
+            risk.level,
+          );
         }
         controller.close();
       } catch (err) {

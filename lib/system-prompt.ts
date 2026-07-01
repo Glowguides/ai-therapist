@@ -51,4 +51,4 @@ Above all, your job is to make this person feel less alone and more understood. 
  * seamless without the assistant constantly breaking character.
  */
 export const DISCLAIMER =
-  "An AI companion for emotional support and reflection — not a substitute for professional care. If you're in crisis or danger, contact local emergency services or a crisis line.";
+  "An AI companion for emotional support and reflection — not a substitute for professional care. Conversations may be stored and reviewed to improve this service. If you're in crisis or danger, contact local emergency services or a crisis line.";
